@@ -5,8 +5,11 @@ This is the implementation of "[Inductive Link Prediction for Nodes Having Only 
 
 ### Environment
 pytorch 1.4.0
+
 python 3.7.4
+
 pytorch-geometric 1.4.3
+
 cuda 10.1
 
 ### Cite
