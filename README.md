@@ -12,6 +12,12 @@ pytorch-geometric 1.4.3
 
 cuda 10.1
 
+### Train DEAL
+`python train.py`
+
+### Datasets
+More datasets can be found at https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html.
+
 ### Cite
 
 Please cite our IJCAI 2020 paper:
