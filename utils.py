@@ -855,8 +855,6 @@ def load_datafile(args):
     
     if args.inductive:
         data_array_file =  folder+'pv0.10_pt0.00_pn0.10_arrays.npz'
-        # data_array_file = folder + 'filtered_arrays_only2.npz'
-        # data_array_file = folder + 'filtered_arrays_only2.npz'
     else:
         data_array_file = folder+'data_arrays_'+args.task+'.npz'
         
