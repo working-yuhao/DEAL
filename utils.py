@@ -797,7 +797,7 @@ def get_us_attr_dict(X):
     return us_attr_dict
 
 #inductive
-def ind_eval(cmodel, nodes, gt_labels,X,nodes_keep, lambdas = (0,1,1), data=None):
+def ind_eval(cmodel, nodes, gt_labels,X,nodes_keep, lambdas = (0,1,1)):
 
     # anode_emb = torch.sparse.mm(data.x, cmodel.attr_emb(torch.arange(data.x.shape[1]).to(cmodel.device)))
     test_data = Data(X, None)
@@ -809,9 +809,6 @@ def ind_eval(cmodel, nodes, gt_labels,X,nodes_keep, lambdas = (0,1,1), data=None
     res = cmodel.attr_layer(first_embs,sec_embs) * lambdas[1]
 
     node_emb = anode_emb.clone()
-    tmp_data = data.copy()
-    tmp_data.x = torch.eye(cmodel.node_num).to(cmodel.device)
-    node_emb[nodes_keep] = cmodel.node_emb(tmp_data)
 
     res = res + cmodel.inter_layer(first_embs,node_emb[nodes[:,1]]) * lambdas[2]
     
