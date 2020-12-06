@@ -1,3 +1,5 @@
+#Some functions may be changed during the extension work of DEAL, I will fix this ASAP.
+
 import torch
 import torch.nn as nn 
 import matplotlib.pyplot as plt
@@ -261,147 +263,18 @@ def get_A(adj_dict, nodeNum):
         A[node,adj_dict[node]] = 1 
     return A
 
-def get_X(attr_dict, nodeNum, attriNum, use_tf=False):
-    X = sp.lil_matrix((nodeNum, attriNum), dtype=np.int8)
-    if use_tf:
-        for node in attr_dict:
-            for a in attr_dict[node]:
-                X[node,a] += 1 
-    else:
-        for node in attr_dict:
-            X[node,attr_dict[node]] = 1 
-    return X        
-
 def save_sp(folder, name, M):
     return sp.save_npz(folder+name+'_sp.npz', M.tocsr())
 def load_sp(folder,name):
     return sp.load_npz(folder+name+'_sp.npz')
 
-def train_val_test_split_adjacency(A, p_val=0.10, p_test=0.1, seed=0, neg_mul=1,
-                                   every_node=True, connected=False, undirected=False,
-                                   use_edge_cover=True, set_ops=True, asserts=False):
+#
+# Please refer to the code of G2G https://github.com/abojchevski/graph2gauss/blob/master/g2g/utils.py#L37
+#
+# def train_val_test_split_adjacency(A, p_val=0.10, p_test=0.1, seed=0, neg_mul=1,
+#                                   every_node=True, connected=False, undirected=False,
+#                                  use_edge_cover=True, set_ops=True, asserts=False):
 
-    assert p_val + p_test > 0
-    assert A.max() == 1  # no weights
-    assert A.min() == 0  # no negative edges
-    assert A.diagonal().sum() == 0  # no self-loops
-    assert not np.any(A.sum(0).A1 + A.sum(1).A1 == 0)  # no dangling nodes
-
-    is_undirected = (A != A.T).nnz == 0
-
-    if undirected:
-        assert is_undirected  # make sure is directed
-        A = sp.tril(A).tocsr()  # consider only upper triangular
-        A.eliminate_zeros()
-    else:
-        if is_undirected:
-            warnings.warn('Graph appears to be undirected. Did you forgot to set undirected=True?')
-
-    np.random.seed(seed)
-
-    E = A.nnz
-    N = A.shape[0]
-    s_train = int(E * (1 - p_val - p_test))
-
-    idx = np.arange(N)
-
-    # hold some edges so each node appears at least once
-    if every_node:
-        if connected:
-            assert sp.csgraph.connected_components(A)[0] == 1  # make sure original graph is connected
-            A_hold = sp.csgraph.minimum_spanning_tree(A)
-        else:
-            A.eliminate_zeros()  # makes sure A.tolil().rows contains only indices of non-zero elements
-            d = A.sum(1).A1
-
-            if use_edge_cover:
-                hold_edges = edge_cover(A)
-
-                # make sure the training percentage is not smaller than len(edge_cover)/E when every_node is set to True
-                min_size = hold_edges.shape[0]
-                if min_size > s_train:
-                    raise ValueError('Training percentage too low to guarantee every node. Min train size needed {:.2f}'
-                                     .format(min_size / E))
-            else:
-                # make sure the training percentage is not smaller than N/E when every_node is set to True
-                if N > s_train:
-                    raise ValueError('Training percentage too low to guarantee every node. Min train size needed {:.2f}'
-                                     .format(N / E))
-
-                hold_edges_d1 = np.column_stack(
-                    (idx[d > 0], np.row_stack(map(np.random.choice, A[d > 0].tolil().rows))))
-
-                if np.any(d == 0):
-                    hold_edges_d0 = np.column_stack((np.row_stack(map(np.random.choice, A[:, d == 0].T.tolil().rows)),
-                                                     idx[d == 0]))
-                    hold_edges = np.row_stack((hold_edges_d0, hold_edges_d1))
-                else:
-                    hold_edges = hold_edges_d1
-
-            if asserts:
-                assert np.all(A[hold_edges[:, 0], hold_edges[:, 1]])
-                assert len(np.unique(hold_edges.flatten())) == N
-
-            A_hold = edges_to_sparse(hold_edges, N)
-
-        A_hold[A_hold > 1] = 1
-        A_hold.eliminate_zeros()
-        A_sample = A - A_hold
-
-        s_train = s_train - A_hold.nnz
-    else:
-        A_sample = A
-
-    idx_ones = np.random.permutation(A_sample.nnz)
-    ones = np.column_stack(A_sample.nonzero())
-    train_ones = ones[idx_ones[:s_train]]
-    test_ones = ones[idx_ones[s_train:]]
-
-    # return back the held edges
-    if every_node:
-        train_ones = np.row_stack((train_ones, np.column_stack(A_hold.nonzero())))
-
-    n_test = len(test_ones) * neg_mul
-
-    stA  = get_ShortestPathM(A,3)
-    index = (stA>2).tocoo()
-    random_sample = np.random.randint(0, len(index.row), n_test)
-    test_zeros = np.vstack([index.row,index.col]).T[random_sample]
-
-    # split the test set into validation and test set
-    s_val_ones = int(len(test_ones) * p_val / (p_val + p_test))
-    s_val_zeros = int(len(test_zeros) * p_val / (p_val + p_test))
-
-    val_ones = test_ones[:s_val_ones]
-    test_ones = test_ones[s_val_ones:]
-
-    val_zeros = test_zeros[:s_val_zeros]
-    test_zeros = test_zeros[s_val_zeros:]
-
-    if undirected:
-        # put (j, i) edges for every (i, j) edge in the respective sets and form back original A
-        symmetrize = lambda x: np.row_stack((x, np.column_stack((x[:, 1], x[:, 0]))))
-        train_ones = symmetrize(train_ones)
-        val_ones = symmetrize(val_ones)
-        val_zeros = symmetrize(val_zeros)
-        test_ones = symmetrize(test_ones)
-        test_zeros = symmetrize(test_zeros)
-        A = A.maximum(A.T)
-
-    if asserts:
-        set_of_train_ones = set(map(tuple, train_ones))
-        assert train_ones.shape[0] + test_ones.shape[0] + val_ones.shape[0] == A.nnz
-        assert (edges_to_sparse(np.row_stack((train_ones, test_ones, val_ones)), N) != A).nnz == 0
-        assert set_of_train_ones.intersection(set(map(tuple, test_ones))) == set()
-        assert set_of_train_ones.intersection(set(map(tuple, val_ones))) == set()
-        assert set_of_train_ones.intersection(set(map(tuple, test_zeros))) == set()
-        assert set_of_train_ones.intersection(set(map(tuple, val_zeros))) == set()
-        assert len(set(map(tuple, test_zeros))) == len(test_ones) * neg_mul
-        assert len(set(map(tuple, val_zeros))) == len(val_ones) * neg_mul
-        assert not connected or sp.csgraph.connected_components(A_hold)[0] == 1
-        assert not every_node or ((A_hold - A) > 0).sum() == 0
-
-    return train_ones, val_ones, val_zeros, test_ones, test_zeros
 
 def get_ShortestPathM(A,k_hop):
     tmpA = A.copy().todense()
